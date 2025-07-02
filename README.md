@@ -1,1 +1,141 @@
-# todolist
+# LLM-WORKFLOW-N8n
+
+n8nで複数のLLMを連携させたワークフローをAPI化し、Kubernetes上で運用するためのプロジェクトです。
+
+## 🚀 クイックスタート
+
+```bash
+# 1. リポジトリをクローン
+git clone https://github.com/your-org/llm-workflow-n8n.git
+cd llm-workflow-n8n
+
+# 2. 環境設定ファイルを作成
+cp .env.example .env
+
+# 3. .envファイルを編集（必須項目を設定）
+# - N8N_BASIC_AUTH_PASSWORD を安全なパスワードに変更
+# - OPENAI_API_KEY を設定（OpenAIを使用する場合）
+# - ANTHROPIC_API_KEY を設定（Claudeを使用する場合）
+
+# 4. n8nを起動
+docker compose up -d
+
+# 5. ブラウザでアクセス
+# http://localhost:5678
+# Basic認証: admin / (設定したパスワード)
+```
+
+## 📋 前提条件
+
+- Docker と Docker Compose がインストールされていること
+- OpenAI API Key または Anthropic API Key（LLMワークフロー用）
+
+## 🎯 プロジェクトの目標
+
+- **APIエンドポイント化**: n8nで作成したワークフローをREST APIとして提供
+- **複数LLM連携**: OpenAI、Anthropicなど複数のLLMを組み合わせた高度な処理
+- **Kubernetes対応**: 本番環境でのスケーラブルな運用
+- **コンテナ化**: ワークフロー組み込み済みのDockerイメージ
+
+## 📁 プロジェクト構成
+
+```
+.
+├── docker-compose.yml    # Docker Compose設定
+├── .env.example         # 環境変数テンプレート
+├── .gitignore          # Git除外設定
+├── workflows/          # n8nワークフローファイル
+├── docker/             # Dockerビルド用ファイル
+├── k8s/                # Kubernetesマニフェスト
+└── docs/               # ドキュメント
+```
+
+## 🔧 設定
+
+### 環境変数
+
+`.env.example`をコピーして`.env`を作成し、以下の必須項目を設定してください：
+
+- `N8N_BASIC_AUTH_PASSWORD`: n8nへのアクセスパスワード（必須）
+- `OPENAI_API_KEY`: OpenAI APIキー（OpenAIを使用する場合）
+- `ANTHROPIC_API_KEY`: Anthropic APIキー（Claudeを使用する場合）
+
+### データの永続化
+
+- `n8n_data/`: n8nの設定、アカウント情報、実行履歴などが保存されます
+- `workflows/`: エクスポートしたワークフローファイルを配置します
+
+## 🛠️ 開発手順
+
+### 1. ワークフローの作成
+
+1. n8nにアクセス（http://localhost:5678）
+2. 新しいワークフローを作成
+3. 必要なノードを配置（Webhook、OpenAI、Code等）
+4. ワークフローを保存してテスト
+
+### 2. ワークフローのエクスポート
+
+1. 作成したワークフローを選択
+2. メニューから「Download」を選択
+3. JSONファイルを`workflows/`ディレクトリに保存
+
+### 3. APIエンドポイントとしてテスト
+
+```bash
+# Webhookエンドポイントにリクエスト送信
+curl -X POST http://localhost:5678/webhook/your-webhook-path \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "テストメッセージ"}'
+```
+
+## 📦 本番環境へのデプロイ
+
+### Dockerイメージのビルド
+
+```bash
+# ワークフロー組み込み済みイメージのビルド
+docker build -t your-registry/n8n-llm-workflow:latest ./docker
+```
+
+### Kubernetesへのデプロイ
+
+```bash
+# マニフェストの適用
+kubectl apply -f k8s/
+```
+
+## 🔒 セキュリティ
+
+- Basic認証でn8nへのアクセスを保護
+- APIキーは環境変数で管理（.envファイルはGitに含めない）
+- 本番環境では適切なシークレット管理を使用
+
+## 🐛 トラブルシューティング
+
+### n8nが起動しない場合
+
+```bash
+# ログを確認
+docker compose logs n8n
+
+# コンテナを再起動
+docker compose restart
+```
+
+### データをリセットしたい場合
+
+```bash
+# 警告: すべてのデータが削除されます
+docker compose down
+rm -rf n8n_data/*
+docker compose up -d
+```
+
+## 📚 参考リンク
+
+- [n8n公式ドキュメント](https://docs.n8n.io/)
+- [n8n Workflow Examples](https://n8n.io/workflows/)
+- [詳細な実装手順](./step-by-step.md)
+
+

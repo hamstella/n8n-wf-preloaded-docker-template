@@ -1,0 +1,167 @@
+{
+  "name": "DomainSearch",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "domain-search",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        280,
+        0
+      ],
+      "id": "168fd27e-e575-42d9-8b9b-ecde75c1deed",
+      "name": "Webhook",
+      "webhookId": "349150a9-23a3-43fc-98cd-263d592419d9"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENAI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.openaiRequest }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        0
+      ],
+      "id": "6fe18b35-a53c-451b-b34d-2e9283726172",
+      "name": "OpenAI HTTP Request"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 入力データの検証とデバッグ\nconst rawData = $input.item.json;\n\n// デバッグ用：受信データの構造をログ出力\nconsole.log('Raw input data:', JSON.stringify(rawData, null, 2));\n\n// 様々なデータ構造に対応\nlet inputData;\nif (rawData.body) {\n  inputData = rawData.body;\n} else if (rawData.texts) {\n  inputData = rawData;\n} else {\n  // データが直接渡されている場合\n  inputData = rawData;\n}\n\nconsole.log('Processed input data:', JSON.stringify(inputData, null, 2));\n\n// textsが配列であることを確認\nif (!inputData || !inputData.texts || !Array.isArray(inputData.texts)) {\n  throw new Error(`Input must contain a \"texts\" array. Received: ${JSON.stringify(inputData)}`);\n}\n\n// 空の配列チェック\nif (inputData.texts.length === 0) {\n  throw new Error('The \"texts\" array cannot be empty');\n}\n\n// 各テキストが文字列であることを確認\nfor (let i = 0; i < inputData.texts.length; i++) {\n  if (typeof inputData.texts[i] !== 'string') {\n    throw new Error(`Element at index ${i} in \"texts\" array must be a string`);\n  }\n}\n\nreturn inputData;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        0
+      ],
+      "id": "c95a0412-c9ec-4ec0-905f-35649929493d",
+      "name": "Validate Input"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// リクエストとテンプレートからプロンプトを合成\nconst inputData = $input.item.json;\n\n// システムメッセージのテンプレート\nconst systemMessage = `あなたはトップクラスのドメインモデリング・ファシリテーターです。\n- 組織開発とドメイン駆動設計 (DDD) に精通し、ユビキタス言語を整備できます。\n- 出力は必ず **UTF-8 の Markdown** ＋ **最後に JSON** を返してください。\n- 不確実な情報には「?」を付け、解決のための追加質問を列挙してください。`;\n\n// ユーザーメッセージのテンプレート\nconst userMessageTemplate = `【目的】  \n複数のドキュメントと会話録⾳から、ビジネスドメインの重要概念（エンティティ／値オブジェクト／ドメインイベント／ユースケース／ペルソナ／制約）を抽出し、  \n初期ユビキタス言語リストと疑問点を作成したい。\n\n【入力データ】  \n<BEGIN_RAW_DATA>\n{INPUT_TEXTS}\n<END_RAW_DATA>\n\n【出力フォーマット】  \n1. **要約 (300 字以内)**  \n   - ドメインの核心を一言で説明\n\n2. **用語リスト**  \n   | 種別 | 用語 | 代表フレーズ | 典型的属性 | 出典 (行番号 or 資料名) |\n   | --- | --- | --- | --- | --- |\n   - 種別は \\`Entity / ValueObject / DomainEvent / UseCase / Persona / Constraint\\` から選択\n\n3. **関係マップ (文章で OK)**  \n   - 主要エンティティ間の「所有」「依存」「発生源→結果」関係を箇条書き\n\n4. **時系列イベント例 (最大 5)**  \n   \\`\\`\\`mermaid\n   sequenceDiagram\n       participant Actor\n       participant System\n       ...\n   \\`\\`\\`\n\n5. **未解決の疑問点**  \n   - 「<用語 or 行番号> が何を指すのか不明」のように列挙\n\n6. **JSON 版 (機械処理用)**  \n   \\`\\`\\`json\n   {\n     \"summary\": \"...\",\n     \"terms\": [\n       { \"type\": \"Entity\", \"name\": \"??\", \"aliases\": [\"??\"], \"attributes\": [\"??\"], \"source\": \"docA p.12\" },\n       ...\n     ],\n     \"relations\": [\n       { \"from\": \"Order\", \"to\": \"Customer\", \"relation\": \"belongsTo\" }\n     ],\n     \"events\": [\"Ordered\", \"Paid\", \"Shipped\"],\n     \"open_questions\": [\"...\"]\n   }\n   \\`\\`\\`\n\n【抽出アルゴリズムの手順】  \n1. **前処理**：改行・ページ番号を保持したままクリーニング。  \n2. **キーフレーズ抽出**：統計＋意味埋め込みで TF-IDF 上位 5% を候補に。  \n3. **クラスタリング**：Sentence-BERT で類似度クラスタリングし、代表語を決定。  \n4. **DDD タグ付け**：  \n   - 「ID / 登録番号 / コード」が付帯 → Entity 候補  \n   - 「～された」受動形動詞やビジネスルール → DomainEvent 候補  \n5. **信頼度スコアリング**：  \n   - 出現頻度 × コンテキスト一貫性で 0-1 を算出し 0.8 未満は「?」を付加。  \n6. **フォーマット整形**：上記出力フォーマットへマッピング。\n\n【制約】  \n- 表記ゆれはカッコ書きで別名を保持（例: 顧客(Customer)）。  \n- 自信が 80% 未満の抽出結果には末尾に「?」。  \n- JSON 部分は **strict モード** でダブルクォートのみ使用し、改行不可。\n\n【読みやすさガイド】  \n- Markdown 内の表は 120 文字以内で改行。  \n- 長い名称は \\`...\\` で省略してもよいが JSON 側はフル名称を保持。`;\n\n// 入力テキストを結合\nconst combinedTexts = inputData.texts.join('\\n\\n');\n\n// ユーザーメッセージを合成\nconst userMessage = userMessageTemplate.replace('{INPUT_TEXTS}', combinedTexts);\n\n// OpenAI API用のリクエストボディを構築\nconst openaiRequest = {\n  model: 'gpt-4o-mini',\n  messages: [\n    {\n      role: 'system',\n      content: systemMessage\n    },\n    {\n      role: 'user', \n      content: userMessage\n    }\n  ],\n  temperature: 0.3,\n  max_tokens: 4000\n};\n\nreturn {\n  ...inputData,\n  openaiRequest: openaiRequest,\n  systemMessage: systemMessage,\n  userMessage: userMessage\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        0
+      ],
+      "id": "03834415-f1b4-4602-a83e-c4bc2ea50c90",
+      "name": "Compose Prompt"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// OpenAIからのレスポンスを処理\nconst response = $input.item.json;\n// OpenAI APIのレスポンスが配列で返される場合の処理\nconst apiResponse = Array.isArray(response) ? response[0] : response;\nconst content = apiResponse.choices?.[0]?.message?.content || apiResponse.content || '';\n\n// JSON部分を抽出\nconst jsonMatch = content.match(/```json\\n([\\s\\S]*?)\\n```/);\nlet extractedJson = null;\n\nif (jsonMatch && jsonMatch[1]) {\n  try {\n    extractedJson = JSON.parse(jsonMatch[1]);\n  } catch (e) {\n    console.error('Failed to parse JSON:', e);\n  }\n}\n\n// Markdown部分（JSON以前の部分）を抽出\nconst markdownContent = jsonMatch \n  ? content.substring(0, content.indexOf('```json'))\n  : content;\n\nreturn {\n  success: true,\n  markdown: markdownContent.trim(),\n  json: extractedJson,\n  fullResponse: content\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        0
+      ],
+      "id": "ec49b59a-e739-48c9-bc3c-a2489c138842",
+      "name": "Parse Response"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// エラーレスポンスを作成\nconst error = $input.item.json.error || {};\n\nreturn {\n  success: false,\n  error: {\n    message: error.message || 'An unknown error occurred',\n    type: error.type || 'unknown',\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        200
+      ],
+      "id": "9d06ed7a-d4e3-4f90-8c43-953d41c95ecd",
+      "name": "Error Handler"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Compose Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "56910f31-e9f4-46a0-bb87-8cf710a1cf61",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e8eae24c153e8d58b07c22015d9183fe69112d36a2002811d2bf6dfaa26531c8"
+  },
+  "id": "U1La4vlJHVLgdDRS",
+  "tags": []
+}
