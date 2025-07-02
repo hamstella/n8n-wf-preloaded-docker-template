@@ -1,6 +1,9 @@
 services:
   n8n:
-    image: n8nio/n8n:latest
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: llm-workflow-n8n:latest
     container_name: n8n
     restart: unless-stopped
     ports:
@@ -42,7 +45,8 @@ services:
       TZ: ${TZ:-Asia/Tokyo}
     volumes:
       - ./n8n_data:/home/node/.n8n
-      - ./workflows:/home/node/workflows
+      # ワークフローは既にイメージに組み込み済みのため、ボリュームマウントは不要
+      # - ./workflows:/home/node/workflows
 
 volumes:
   n8n_data:

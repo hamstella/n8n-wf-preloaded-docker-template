@@ -1,4 +1,4 @@
-# LLM-WORKFLOW-N8n
+# LLM-WORKFLOW-N8N
 
 n8nで複数のLLMを連携させたワークフローをAPI化し、Kubernetes上で運用するためのプロジェクトです。
 
@@ -44,8 +44,13 @@ docker compose up -d
 ├── docker-compose.yml    # Docker Compose設定
 ├── .env.example         # 環境変数テンプレート
 ├── .gitignore          # Git除外設定
+├── .dockerignore       # Dockerビルド除外設定
 ├── workflows/          # n8nワークフローファイル
+│   └── DomainSearch.json  # ドメインモデリング用ワークフロー
 ├── docker/             # Dockerビルド用ファイル
+│   ├── Dockerfile      # カスタムn8nイメージ定義
+│   ├── entrypoint.sh   # カスタムエントリーポイント
+│   └── import-workflows.js  # ワークフローインポートスクリプト
 ├── k8s/                # Kubernetesマニフェスト
 └── docs/               # ドキュメント
 ```
@@ -94,15 +99,59 @@ curl -X POST http://localhost:5678/webhook/your-webhook-path \
 ### Dockerイメージのビルド
 
 ```bash
-# ワークフロー組み込み済みイメージのビルド
-docker build -t your-registry/n8n-llm-workflow:latest ./docker
+# ワークフロー組み込み済みイメージのビルド（方法1: 直接ビルド）
+docker build -t your-registry/n8n-llm-workflow:latest -f docker/Dockerfile .
+
+# ワークフロー組み込み済みイメージのビルド（方法2: Docker Compose使用）
+docker compose build
+
+# イメージのテスト起動
+docker compose up -d
+
+# ログの確認（ワークフローインポート状況を確認）
+docker compose logs n8n
 ```
+
+#### カスタムイメージの特徴
+
+- **ワークフロー事前インストール**: `workflows/`ディレクトリ内のすべての`.json`ファイルが自動的にインポートされ、有効化されます
+- **自動インポート**: コンテナ起動時に自動的にワークフローがn8nに登録されます
+- **本番環境対応**: 外部ボリュームマウント不要で、完全に自己完結したイメージです
 
 ### Kubernetesへのデプロイ
 
 ```bash
+# イメージをレジストリにプッシュ
+docker tag llm-workflow-n8n:latest your-registry/n8n-llm-workflow:latest
+docker push your-registry/n8n-llm-workflow:latest
+
 # マニフェストの適用
 kubectl apply -f k8s/
+```
+
+## ⚙️ ワークフロー管理
+
+### 新しいワークフローの追加
+
+1. n8nでワークフローを作成・テスト
+2. ワークフローをエクスポート（JSON形式）
+3. `workflows/`ディレクトリに保存
+4. Dockerイメージを再ビルド
+
+```bash
+# 新しいワークフローでイメージを更新
+docker compose build --no-cache
+docker compose up -d
+```
+
+### ワークフローの確認
+
+```bash
+# コンテナ内のワークフローファイル確認
+docker compose exec n8n ls -la /data/workflows/
+
+# インポートログの確認
+docker compose logs n8n | grep -i "workflow"
 ```
 
 ## 🔒 セキュリティ
@@ -137,5 +186,3 @@ docker compose up -d
 - [n8n公式ドキュメント](https://docs.n8n.io/)
 - [n8n Workflow Examples](https://n8n.io/workflows/)
 - [詳細な実装手順](./step-by-step.md)
-
-
