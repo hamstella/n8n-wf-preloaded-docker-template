@@ -1,4 +1,4 @@
-# N8N-WORKFLOW-TEMPLATE
+# n8n-wf-preloaded-docker-template
 
 作成済みのn8nワークフローをインポートしたDockerイメージを作成するためのテンプレートプロジェクトです。
 
