@@ -1,10 +1,7 @@
 services:
   n8n:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    image: llm-workflow-n8n:latest
-    container_name: n8n
+    build: .
+    image: n8n-with-workflows
     restart: unless-stopped
     ports:
       - "${N8N_PORT:-5678}:5678"
@@ -18,12 +15,7 @@ services:
       # Database settings (SQLite - default)
       DB_TYPE: sqlite
       DB_SQLITE_VACUUM_ON_STARTUP: ${DB_SQLITE_VACUUM_ON_STARTUP:-false}
-      
-      # Security settings
-      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
-      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
-      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-changeme}
-      
+            
       # Webhook settings
       WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678/}
       N8N_PAYLOAD_SIZE_MAX: ${N8N_PAYLOAD_SIZE_MAX:-16}
@@ -43,10 +35,3 @@ services:
       # Timezone
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Asia/Tokyo}
       TZ: ${TZ:-Asia/Tokyo}
-    volumes:
-      - ./n8n_data:/home/node/.n8n
-      # ワークフローは既にイメージに組み込み済みのため、ボリュームマウントは不要
-      # - ./workflows:/home/node/workflows
-
-volumes:
-  n8n_data:
